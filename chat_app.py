@@ -6,16 +6,20 @@ import serial
 import time
 import threading
 import logging
+#import dequeue
+
 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
 
-
 class Chat:
 
     def __init__(self,serial_port,baud_rate=115200):
         self.threads=[]
+        self.lock=threading.RLock()
+        #self.queue = deque([])
+        self.keep_interrupt = False
         self.serial_port=serial_port
         self.baud_rate=baud_rate
 	self.s = serial.Serial(self.serial_port,self.baud_rate,timeout=1)	#opens a serial port (resets the device!) 
@@ -30,22 +34,29 @@ class Chat:
         self.start()
 
     def start(self):
-        time.sleep(1)
 	address='FF'
-        message='Hello!'
-	#self.receive()
-        t1=threading.Thread(target=self.transmit, name='transmitter', args=(message,address,))
+        t1=threading.Thread(target=self.transmit, name='transmitter', args=(address,))
         t2=threading.Thread(target=self.receive, name='receiver')
         self.threads.append(t1)
         self.threads.append(t2)
-        t1.start()
-        t2.start()
+        for t in self.threads:
+            t.start()
+        for t in self.threads:
+            t.join()
         
 
-    def transmit(self,message,address):
+    def transmit(self,address):
         logging.debug('Starting')
-	time.sleep(2)
-	self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
+        time.sleep(0.1)
+        while True:
+            try:
+                message = raw_input('')
+                print message
+                self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
+            except KeyboardInterrupt:
+                logging.debug('Ctrl+C')
+                sys.exit()
+
         logging.debug('Exiting') 
         return
 
@@ -55,7 +66,7 @@ class Chat:
         while True:	#while not terminated 
             try:
                 byte =self.s.read(1)#read one byte (blocks until data available or timeout reached)
-                #print byte
+                #logging.debug('Thread alive')
                 if byte=='\n':#if termination character reached 
                     print message #print message
                     message = ""#reset message
@@ -64,7 +75,9 @@ class Chat:
             except serial.SerialException:
                 continue #on timeout try to read again
             except KeyboardInterrupt:
-                sys.exit()#on ctrl-c terminate program
+                logging.debug('Ctrl+C')
+                sys.exit()
+
         logging.debug('Exiting')
         return
 
@@ -72,7 +85,8 @@ if __name__=="__main__":
     if len(sys.argv)>1:
         serial_port=sys.argv[1]
     else:
-	serial_port='/dev/ttyACM0'
-
+        serial_port='/dev/ttyACM0'
+    
     c=Chat(serial_port)
+
 
