@@ -6,7 +6,7 @@ import serial
 import time
 import threading
 import logging
-#import dequeue
+#import Queue
 
 
 logging.basicConfig(level=logging.DEBUG,
@@ -18,7 +18,8 @@ class Chat:
     def __init__(self,serial_port,baud_rate=115200):
         self.threads=[]
         self.lock=threading.RLock()
-        #self.queue = deque([])
+        #self.queue = Queue()
+        self.success =False
         self.keep_interrupt = False
         self.serial_port=serial_port
         self.baud_rate=baud_rate
@@ -48,11 +49,28 @@ class Chat:
     def transmit(self,address):
         logging.debug('Starting')
         time.sleep(0.1)
+        message = "Hello World!"
+        while True:
+            print "initial loop"
+            self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
+            self.lock.acquire()
+            if self.success==True:
+                self.lock.release()
+                break
+            else:
+                self.lock.release()
+                
         while True:
             try:
-                message = raw_input('')
-                print message
-                self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
+                self.lock.acquire()
+                #logging.debug('lock aqcuired')
+                #print self.success
+                if self.success==True:
+                    #print "Transmitting..."
+                    self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
+                    self.success=False
+                self.lock.release()
+                #print self.success
             except KeyboardInterrupt:
                 logging.debug('Ctrl+C')
                 sys.exit()
@@ -63,12 +81,19 @@ class Chat:
     def receive(self):
         logging.debug('Starting')
         message =""
+	done="m[D]"
         while True:	#while not terminated 
             try:
+                logging.debug("Reading...")
                 byte =self.s.read(1)#read one byte (blocks until data available or timeout reached)
-                #logging.debug('Thread alive')
                 if byte=='\n':#if termination character reached 
                     print message #print message
+                    if message==done:
+                        self.lock.acquire()
+                        logging.debug('lock aqcuired')
+                        self.success=True
+                        self.lock.release()
+                        print "Success!"
                     message = ""#reset message
                 else:
                     message =message +byte #concatenate the message
