@@ -19,7 +19,7 @@ class Chat:
         self.threads=[]
         self.lock=threading.RLock()
         #self.queue = Queue()
-        self.success =False
+        self.success =True
         self.keep_interrupt = False
         self.serial_port=serial_port
         self.baud_rate=baud_rate
@@ -50,27 +50,20 @@ class Chat:
         logging.debug('Starting')
         time.sleep(0.1)
         message = "Hello World!"
-        while True:
-            print "initial loop"
-            self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
-            self.lock.acquire()
-            if self.success==True:
-                self.lock.release()
-                break
-            else:
-                self.lock.release()
                 
         while True:
             try:
                 self.lock.acquire()
                 #logging.debug('lock aqcuired')
-                #print self.success
+                print self.success
                 if self.success==True:
-                    #print "Transmitting..."
+                    print "Transmitting..."
                     self.s.write("m["+message+"\0,"+address+"]\n")#send message to device with address
                     self.success=False
-                self.lock.release()
-                #print self.success
+                    self.lock.release()
+                else:
+                    self.lock.release()
+                print self.success
             except KeyboardInterrupt:
                 logging.debug('Ctrl+C')
                 sys.exit()
@@ -84,7 +77,7 @@ class Chat:
 	done="m[D]"
         while True:	#while not terminated 
             try:
-                logging.debug("Reading...")
+                #logging.debug("Reading...")
                 byte =self.s.read(1)#read one byte (blocks until data available or timeout reached)
                 if byte=='\n':#if termination character reached 
                     print message #print message
