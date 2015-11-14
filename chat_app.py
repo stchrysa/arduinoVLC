@@ -63,8 +63,10 @@ class Sender(threading.Thread):
 
 class Chat:
 
-    def __init__(self,serial_port,baud_rate=115200):
-        self.destination='AB'
+    def __init__(self,serial_port,source,destination,baud_rate=115200):
+        self.destination=destination
+        self.source=source
+
         self.threads=[]
         self.lock=threading.RLock()
 
@@ -75,7 +77,7 @@ class Chat:
 	self.s = serial.Serial(self.serial_port,self.baud_rate,timeout=1)	#opens a serial port (resets the device!) 
         time.sleep(2)#give the device some time to startup (2 seconds)
         #write to the device’s serial port
-        self.s.write("a[CD]\n")#set the device address to CD
+        self.s.write("a["+self.source+"]\n")#set the device address to CD
         time.sleep(0.1)#wait for settings to be applied
         self.s.write("c[1,0,5]\n")#set number of retransmissions to 5
         time.sleep(0.1) #wait for settings to be applied
@@ -106,10 +108,14 @@ class Chat:
 if __name__=="__main__":
     if len(sys.argv)>1:
         serial_port=sys.argv[1]
+        source=sys.argv[2]
+        destination=sys.argv[3]
     else:
         serial_port='/dev/ttyACM0'
+        source = 'AB'
+        destination = 'CD'
     
-    c=Chat(serial_port)
+    c=Chat(serial_port,source,destination)
     c.start()
     
 
