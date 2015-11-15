@@ -30,14 +30,17 @@ class Reader(threading.Thread):
                 #logging.debug("Reading...")
                 byte =self.s.read(1)#read one byte (blocks until data available or timeout reached)
                 if byte=='\n':#if termination character reached 
-                    print message #print message
+                    print self.parse(message) #print message
+                    """"
                     if message==done:
                         lock.acquire()
                         try:
                             self.comQueue.put("m[D]")
                         finally:
                             lock.release()
-                        logging.debug("Success!")
+                            logging.debug("Done!")
+                    """
+                     
                     message = ""#reset message
                 else:
                     message =message +byte #concatenate the message
@@ -46,6 +49,13 @@ class Reader(threading.Thread):
 
         logging.debug('Exiting')
         return
+    
+    def parse(self,msg):
+        m1=msg.split(']')
+        m2=m1[0].split('[')
+        m2b=m2[1].split(',')
+        return m2[0:1]+m2b
+        
     
     
 
@@ -63,23 +73,25 @@ class Sender(threading.Thread):
         time.sleep(0.1)
         self.s.write("m[Testing...\0,"+self.destination+"]\n")#send message to destination
         while not self.stopRequest.is_set():
+            """
+            lock.acquire()
+            #logging.debug(self.comQueue)
             try:
-                lock.acquire()
-                #logging.debug(self.comQueue)
                 try:
                     message = self.comQueue.get_nowait()
-
-                    logging.debug(message)
-                    if message == "m[D]":               
-                        self.s.write("m[Testing...\0,"+self.destination+"]\n")
-                finally:
-                    lock.release()
-            except Queue.Empty:
-                continue
+                except Queue.Empty:
+                    continue
+                logging.debug(message)
+                if message == "m[D]":               
+                    self.s.write("m[Testing...\0,"+self.destination+"]\n")
+            finally:
+                lock.release()
+            """
+            self.s.write("m[Testing...\0,"+self.destination+"]\n")  
         logging.debug('Exiting')
         return 
 
-class Chat:
+class Communicator:
 
     def __init__(self,serial_port,source,destination,baud_rate=115200):
         self.destination=destination
@@ -122,7 +134,18 @@ class Chat:
                 logging.debug('Ctrl+C')
                 sys.exit()
 
-    
+
+class Measurements:
+
+    def __init__(self,communicator):
+        self.communicator = communicator
+
+        with open('log.csv', 'w') as csvfile:
+    	    fieldnames = ['timestamp', 'RTT','arrival_offset','src_ip','message_type','peer_ip','tx_hash','peers_no','arrival']
+    	    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+	    writer.writeheader()       
+ 
+
 
 if __name__=="__main__":
     if len(sys.argv)>1:
@@ -134,6 +157,6 @@ if __name__=="__main__":
         source = 'AB'
         destination = 'CD'
     
-    c=Chat(serial_port,source,destination)
+    c=Communicator(serial_port,source,destination)
     c.start()
 
