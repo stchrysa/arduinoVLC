@@ -13,6 +13,42 @@ logging.basicConfig(level=logging.DEBUG,
                     )
 lock=threading.Lock()
 
+class Message:
+
+    def __init__(self, message):
+        self.message = message
+        self.type = None
+        self.msgType = None
+        self.rxType = None
+        self.data = None
+        self.stats ={}
+        self.parse(message)
+
+
+    def parse(self,msg):
+        struct = {}
+        m1 = msg.split(']')
+        m2 = m1[0].split('[')
+        m2b = m2[1].split(',')
+        if m2[0] == 'm':
+            self.type = 'msg'
+            self.msgType = m2b[0]
+            if self.msgType == 'R':
+                self.rxType = m2b[1]
+                self.data = m2b[2]
+        elif m2[0] == 's':
+            self.type = 'stats'
+            self.stats['mode'] = m2b[0]
+            self.stats['type'] = m2b[1]
+            self.stats['src'] = m2b[2].split('->')[0]
+            self.stats['dst'] = m2b[2].split('->')[1]
+            self.stats['size'] = m2b[3]
+            self.stats['seq'] = m2b[4]
+            self.stats['cw'] =  m2b[5]
+            self.stats['cwsize'] = m2b[6]
+            self.stats['dispatch'] = m2b[7]
+            self.stats['time'] = m2b[8]
+
 class Reader(threading.Thread):
 
     def __init__(self, serial,comQueue):
@@ -24,15 +60,14 @@ class Reader(threading.Thread):
     def run(self):
         logging.debug('Starting')
         message =""
-	done="m[D]"
         while not self.stopRequest.is_set(): 
             try:
                 #logging.debug("Reading...")
                 byte =self.s.read(1)#read one byte (blocks until data available or timeout reached)
                 if byte=='\n':#if termination character reached 
-                    print self.parse(message) #print message
+                    msgObj = Message(message)
                     """"
-                    if message==done:
+                    if msgObj.type=='D':
                         lock.acquire()
                         try:
                             self.comQueue.put("m[D]")
@@ -50,11 +85,7 @@ class Reader(threading.Thread):
         logging.debug('Exiting')
         return
     
-    def parse(self,msg):
-        m1=msg.split(']')
-        m2=m1[0].split('[')
-        m2b=m2[1].split(',')
-        return m2[0:1]+m2b
+
         
     
     
@@ -141,7 +172,7 @@ class Measurements:
         self.communicator = communicator
 
         with open('log.csv', 'w') as csvfile:
-    	    fieldnames = ['timestamp', 'RTT','arrival_offset','src_ip','message_type','peer_ip','tx_hash','peers_no','arrival']
+    	    fieldnames = []
     	    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 	    writer.writeheader()       
  
