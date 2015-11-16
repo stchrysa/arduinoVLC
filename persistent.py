@@ -36,8 +36,8 @@ class Message:
             self.type = 'msg'
             self.msgType = m2b[0]
             if self.msgType == 'R':
-                self.rxType = m2b[1]
-                self.data = m2b[2]
+                self.rxType = m2b[0]
+                self.data = m2b[1]
         elif m2[0] == 's':
             self.type = 'stats'
             self.stats['mode'] = m2b[0]
