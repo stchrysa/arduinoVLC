@@ -7,21 +7,22 @@ import time
 import threading
 import logging
 import Queue
+import csv
 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
-lock=threading.Lock()
+lock = threading.Lock()
 
 class Message:
 
     def __init__(self, message):
         self.message = message
-        self.type = None
-        self.msgType = None
-        self.rxType = None
-        self.data = None
-        self.stats ={}
+        self.type = ''
+        self.msgType = ''
+        self.rxType = ''
+        self.data = ''
+        self.stats = {}
         self.parse(message)
 
 
@@ -29,7 +30,8 @@ class Message:
         struct = {}
         m1 = msg.split(']')
         m2 = m1[0].split('[')
-        m2b = m2[1].split(',')
+        if len(m2) > 1:
+            m2b = m2[1].split(',')
         if m2[0] == 'm':
             self.type = 'msg'
             self.msgType = m2b[0]
@@ -48,37 +50,44 @@ class Message:
             self.stats['cwsize'] = m2b[6]
             self.stats['dispatch'] = m2b[7]
             self.stats['time'] = m2b[8]
+        else:
+            self.type = m2[0]   
 
 class Reader(threading.Thread):
 
-    def __init__(self, serial,comQueue):
+    def __init__(self, serial,comQueue,results):
         super(Reader, self).__init__()
-        self.s=serial
-        self.comQueue=comQueue
+        self.s = serial
+        self.comQueue = comQueue
         self.stopRequest = threading.Event()
+        self.results = results
 
     def run(self):
         logging.debug('Starting')
-        message =""
+        message = ""
         while not self.stopRequest.is_set(): 
             try:
                 #logging.debug("Reading...")
-                byte =self.s.read(1)#read one byte (blocks until data available or timeout reached)
-                if byte=='\n':#if termination character reached 
+                byte = self.s.read(1)#read one byte (blocks until data available or timeout reached)
+                if byte == '\n':#if termination character reached 
+                    print message
                     msgObj = Message(message)
-                    """"
-                    if msgObj.type=='D':
+                    if (msgObj.type == 'msg') & (msgObj.msgType == 'D'):
+                        #pass
+                        #"""
                         lock.acquire()
                         try:
+                            logging.debug("Done!")
                             self.comQueue.put("m[D]")
                         finally:
                             lock.release()
                             logging.debug("Done!")
-                    """
-                     
+                        #"""
+                    elif msgObj.type == 'stats':
+                         logging.debug(msgObj.stats['size'])
                     message = ""#reset message
                 else:
-                    message =message +byte #concatenate the message
+                    message = message +byte #concatenate the message
             except serial.SerialException:
                 continue #on timeout try to read again
 
@@ -92,48 +101,50 @@ class Reader(threading.Thread):
 
 class Sender(threading.Thread):
 
-    def __init__(self, serial, comQueue, destination):
+    def __init__(self, serial, comQueue, destination, defaultTxPayload):
         super(Sender, self).__init__()
-        self.s=serial
-        self.comQueue=comQueue
+        self.s = serial
+        self.comQueue = comQueue
         self.destination = destination
+        self.defaultTxPayload = defaultTxPayload
         self.stopRequest = threading.Event()
 
     def run(self):
         logging.debug('Starting')
         time.sleep(0.1)
-        self.s.write("m[Testing...\0,"+self.destination+"]\n")#send message to destination
+        self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")#send message to destination
         while not self.stopRequest.is_set():
-            """
+            #"""
             lock.acquire()
             #logging.debug(self.comQueue)
             try:
                 try:
                     message = self.comQueue.get_nowait()
-                except Queue.Empty:
+                    logging.debug(message)
+                    if message == "m[D]":               
+                        self.s.write("m[Testing...\0,"+self.destination+"]\n")
+                finally:
+                    lock.release()
+            except Queue.Empty:
                     continue
-                logging.debug(message)
-                if message == "m[D]":               
-                    self.s.write("m[Testing...\0,"+self.destination+"]\n")
-            finally:
-                lock.release()
-            """
-            self.s.write("m[Testing...\0,"+self.destination+"]\n")  
+            #"""
+            self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")  
         logging.debug('Exiting')
         return 
 
 class Communicator:
 
-    def __init__(self,serial_port,source,destination,baud_rate=115200):
-        self.destination=destination
-        self.source=source
+    def __init__(self,serial_port,payload,source,destination,baud_rate=115200):
+        self.source = source
+        self.destination = destination
+        self.defaultTxPayload = payload
 
-        self.threads=[]
+        self.threads = []
 
-        self.comQueue=Queue.Queue()
+        self.comQueue = Queue.Queue()
 
-        self.serial_port=serial_port
-        self.baud_rate=baud_rate
+        self.serial_port = serial_port
+        self.baud_rate = baud_rate
 	self.initialize_device()
 
     def initialize_device(self):
@@ -147,9 +158,10 @@ class Communicator:
         self.s.write("c[0,1,30]\n")#set FEC threshold to 30 (apply FEC to packets with payload >= 30)
 
     def start(self):
-        t1=Sender(self.s,self.comQueue,self.destination)
+        results = Results(self)
+        t1 = Sender(self.s,self.comQueue,self.destination,self.defaultTxPayload)
         t1.setName('sender')
-        t2=Reader(self.s,self.comQueue) 
+        t2 = Reader(self.s,self.comQueue,results) 
         t2.setName('receiver')
         self.threads.append(t1)
         self.threads.append(t2)
@@ -166,28 +178,30 @@ class Communicator:
                 sys.exit()
 
 
-class Measurements:
+class Results:
 
     def __init__(self,communicator):
         self.communicator = communicator
 
-        with open('log.csv', 'w') as csvfile:
-    	    fieldnames = []
+        with open('results.csv', 'w') as csvfile:
+    	    fieldnames = ['throughput','delay']
     	    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 	    writer.writeheader()       
  
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     if len(sys.argv)>1:
-        serial_port=sys.argv[1]
-        source=sys.argv[2]
-        destination=sys.argv[3]
+        payload = sys.argv[2]
+        serial_port = sys.argv[1]
+        source = sys.argv[3]
+        destination = sys.argv[4]
     else:
-        serial_port='/dev/ttyACM0'
+        payload = 'T'
+        serial_port = '/dev/ttyACM0'
         source = 'AB'
         destination = 'CD'
     
-    c=Communicator(serial_port,source,destination)
+    c = Communicator(serial_port,payload,source,destination)
     c.start()
 
