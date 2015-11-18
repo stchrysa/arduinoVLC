@@ -60,8 +60,8 @@ class Reader(threading.Thread):
         self.s = serial
         self.comQueue = comQueue
         self.stopRequest = threading.Event()
-        with open('delay.csv','w') as fd:
-            fd.write('delay\n')
+        with open('throughput.csv','w') as fd:
+            fd.write('time data\n')
         
     def run(self):
         logging.debug('Starting')
@@ -86,20 +86,10 @@ class Reader(threading.Thread):
                         #"""
                     elif msgObj.type == 'stats':
                          if msgObj.stats['type'] == 'D':
-                             seqNo1 = msgObj.stats['seq']
-                             logging.debug(seqNo1)
-                             t1 = msgObj.stats['time']
-                         elif msgObj.stats['type'] == 'A':
-                             seqNo2 = msgObj.stats['seq']
-                             logging.debug(seqNo2)
-                             t2 = msgObj.stats['time']
-                             if seqNo2 == seqNo1:
-                                 logging.debug("writing result")
-                                 RTT = int(t2)-int(t1)
-                                 t1 = 0
-                                 t2 = 0
-                                 with open('delay.csv','a') as fd:
-                                     fd.write(str(RTT)+'\n')
+                             t = msgObj.stats['time']
+                             data = msgObj.stats['size']
+                             with open('throughput.csv','a') as fd:
+                                 fd.write(str(t)+' '+str(data)+'\n')
                                 
                     message = ""#reset message
                 else:
@@ -114,43 +104,6 @@ class Reader(threading.Thread):
 
         
     
-    
-
-class Sender(threading.Thread):
-
-    def __init__(self, serial, comQueue, destination, defaultTxPayload):
-        super(Sender, self).__init__()
-        self.s = serial
-        self.comQueue = comQueue
-        self.destination = destination
-        self.defaultTxPayload = defaultTxPayload
-        self.stopRequest = threading.Event()
-
-    def run(self):
-        logging.debug('Starting')
-        time.sleep(0.1)
-        self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")#send message to destination
-        while not self.stopRequest.is_set():
-            #"""
-            lock.acquire()
-            #logging.debug(self.comQueue)
-            try:
-                try:
-                    message = self.comQueue.get_nowait()
-                    #logging.debug(message)
-                    if message == "m[D]":
-                        #logging.debug('sending...')
-                        for i in range(1):               
-                            self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")
-                        #logging.debug('send!')
-                finally:
-                    lock.release()
-            except Queue.Empty:
-                    continue
-            #"""
-            #self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")  
-        logging.debug('Exiting')
-        return 
 
 class Communicator:
 
@@ -178,11 +131,8 @@ class Communicator:
         self.s.write("c[0,1,30]\n")#set FEC threshold to 30 (apply FEC to packets with payload >= 30)
 
     def start(self):
-        t1 = Sender(self.s,self.comQueue,self.destination,self.defaultTxPayload)
-        t1.setName('sender')
         t2 = Reader(self.s,self.comQueue) 
         t2.setName('receiver')
-        self.threads.append(t1)
         self.threads.append(t2)
         for t in self.threads:
             t.setDaemon(True)
