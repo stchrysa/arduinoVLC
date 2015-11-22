@@ -40,15 +40,17 @@ class Message:
         elif m2[0] == 's':
             self.type = 'stats'
             self.stats['mode'] = m2b[0]
-            self.stats['type'] = m2b[1]
-            self.stats['src'] = m2b[2].split('->')[0]
-            self.stats['dst'] = m2b[2].split('->')[1]
-            self.stats['size'] = m2b[3].split('(')[0]
-            self.stats['seq'] = m2b[4]
-            self.stats['cw'] =  m2b[5]
-            self.stats['cwsize'] = m2b[6]
-            self.stats['dispatch'] = m2b[7]
-            self.stats['time'] = m2b[8]
+            if (self.stats['mode'] == 'R') or (self.stats['mode'] == 'T'):
+                self.stats['type'] = m2b[1]
+                if (self.stats['type'] == 'D') or (self.stats['type'] == 'A'):
+                    self.stats['src'] = m2b[2].split('->')[0]
+                    self.stats['dst'] = m2b[2].split('->')[1]
+                    self.stats['size'] = m2b[3].split('(')[0]
+                    self.stats['seq'] = m2b[4]
+                    self.stats['cw'] =  m2b[5]
+                    self.stats['cwsize'] = m2b[6]
+                    self.stats['dispatch'] = m2b[7]
+                    self.stats['time'] = m2b[8]
         else:
             self.type = m2[0]   
 
