@@ -7,7 +7,6 @@ import time
 import threading
 import logging
 import Queue
-import csv
 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
@@ -87,15 +86,17 @@ class Reader(threading.Thread):
                     elif msgObj.type == 'stats':
                          if msgObj.stats['type'] == 'D':
                              seqNo1 = msgObj.stats['seq']
-                             logging.debug(seqNo1)
-                             t1 = msgObj.stats['time']
+                             #logging.debug(seqNo1)
+                             #t1 = msgObj.stats['time']
+                             t1 = time.time()
                          elif msgObj.stats['type'] == 'A':
                              seqNo2 = msgObj.stats['seq']
-                             logging.debug(seqNo2)
-                             t2 = msgObj.stats['time']
+                             #logging.debug(seqNo2)
+                             #t2 = msgObj.stats['time']
+                             t2 = time.time()
                              if seqNo2 == seqNo1:
-                                 logging.debug("writing result")
-                                 RTT = int(t2)-int(t1)
+                                 #logging.debug("writing result")
+                                 RTT = t2-t1
                                  t1 = 0
                                  t2 = 0
                                  with open('delay.csv','a') as fd:
@@ -133,28 +134,26 @@ class Sender(threading.Thread):
         while not self.stopRequest.is_set():
             #"""
             lock.acquire()
-            #logging.debug(self.comQueue)
             try:
                 try:
                     message = self.comQueue.get_nowait()
-                    #logging.debug(message)
+                    logging.debug(message)
                     if message == "m[D]":
+                        time.sleep(0.005)
                         #logging.debug('sending...')
-                        for i in range(1):               
-                            self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")
+                        self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")
                         #logging.debug('send!')
                 finally:
                     lock.release()
             except Queue.Empty:
                     continue
             #"""
-            #self.s.write("m["+self.defaultTxPayload+"\0,"+self.destination+"]\n")  
         logging.debug('Exiting')
         return 
 
 class Communicator:
 
-    def __init__(self,serial_port,payload,source,destination,baud_rate=115200):
+    def __init__(self,serial_port,payload,source,destination,difs,cw_min):
         self.source = source
         self.destination = destination
         self.defaultTxPayload = payload
@@ -164,7 +163,10 @@ class Communicator:
         self.comQueue = Queue.Queue()
 
         self.serial_port = serial_port
-        self.baud_rate = baud_rate
+        self.difs = difs
+        self.cw_min = cw_min
+        self.baud_rate = 115200
+
 	self.initialize_device()
 
     def initialize_device(self):
@@ -176,6 +178,13 @@ class Communicator:
         self.s.write("c[1,0,5]\n")#set number of retransmissions to 5
         time.sleep(0.1) #wait for settings to be applied
         self.s.write("c[0,1,30]\n")#set FEC threshold to 30 (apply FEC to packets with payload >= 30)
+        if self.difs != None:
+            time.sleep(0.1) #wait for settings to be applied
+            self.s.write("c[1,1,"+self.difs+"]\n")#set difs
+        if self.cw_min != None:
+            time.sleep(0.1) #wait for settings to be applied
+            self.s.write("c[1,2,"+self.cw_min+"]\n")#set CW min value
+        time.sleep(0.1) #wait for settings to be applied
 
     def start(self):
         t1 = Sender(self.s,self.comQueue,self.destination,self.defaultTxPayload)
@@ -199,20 +208,25 @@ class Communicator:
 
 
 if __name__ == "__main__":
+    payload = 'Test'
+    serial_port = '/dev/ttyACM0'
+    source = 'AB'
+    destination = 'CD'
+    difs = None
+    cw_min = None
+    
     if len(sys.argv)>1:
         serial_port = sys.argv[1]
         payloadSize = sys.argv[2]
         source = sys.argv[3]
         destination = sys.argv[4]
+        if len(sys.argv)>5:
+            difs = sys.argv[5]
+            cw_min = sys.argv[6]
         payload = ''
         for i in range(int(payloadSize)):
             payload = payload + 'a'
-    else:
-        payload = 'Test'
-        serial_port = '/dev/ttyACM0'
-        source = 'AB'
-        destination = 'CD'
     
-    c = Communicator(serial_port,payload,source,destination)
+    c = Communicator(serial_port,payload,source,destination,difs,cw_min)
     c.start()
 

@@ -7,7 +7,6 @@ import time
 import threading
 import logging
 import Queue
-import csv
 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
@@ -61,7 +60,7 @@ class Reader(threading.Thread):
         self.comQueue = comQueue
         self.stopRequest = threading.Event()
         with open('throughput.csv','w') as fd:
-            fd.write('time data\n')
+            fd.write('seq,time,data\n')
         
     def run(self):
         logging.debug('Starting')
@@ -88,8 +87,9 @@ class Reader(threading.Thread):
                          if msgObj.stats['type'] == 'D':
                              t = msgObj.stats['time']
                              data = msgObj.stats['size']
+                             seq = msgObj.stats['seq']
                              with open('throughput.csv','a') as fd:
-                                 fd.write(str(t)+' '+str(data)+'\n')
+                                 fd.write(str(seq)+','+str(t)+','+str(data)+'\n')
                                 
                     message = ""#reset message
                 else:
