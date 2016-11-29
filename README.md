@@ -1,2 +1,2 @@
 # arduinoVLC
-Visual light communication between Arduinos
+Visible light communication between Arduinos
